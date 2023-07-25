@@ -1,0 +1,14 @@
+# .gitignore
+
+# Ignore Python compiled files
+*.pyc
+
+# Ignore directories created by virtual environments
+venv/
+.venv/
+
+# Ignore the ipynb checkpoints created by Jupyter notebook
+.ipynb_checkpoints/
+
+# Ignore settings directory created by VSCode
+.vscode/
