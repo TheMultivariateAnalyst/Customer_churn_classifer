@@ -1,7 +1,7 @@
 # Customer_churn_classifer
 # Bank Marketing Campaign Analysis
 
-This project involves the use of machine learning to analyze and predict outcomes of direct marketing campaigns based on banking data. The principal aim of these models is to predict client behavior, particularly whether they will subscribe to a term deposit or not.
+This project involves the use of machine learning to analyze and predict outcomes of direct marketing campaigns based on banking data. The principal aim of these models is to predict client behavior, particularly whether they will subscribe to a term deposit or not.This project also compares a fully hypertuned logistic regression model with a mlp classifier to compare on the idea of ML vs DL.
 
 ## Dataset
 
