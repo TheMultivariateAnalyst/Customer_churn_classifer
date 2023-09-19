@@ -1,76 +1,112 @@
-# Importing necessary libraries
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split, GridSearchCV
+from imblearn.over_sampling import SMOTE
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-from sklearn.model_selection import cross_val_score
-from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.neural_network import MLPClassifier
 
 # Load the dataset
-data = pd.read_csv('bank-additional-full.csv', sep=';')
+data = pd.read_csv("bank-additional-full.csv", sep=";")
 
-# Drop the 'duration' column
-data = data.drop(['duration'], axis=1)
+# Descriptive statistics
+desc_stats = data.describe()
 
-# Define the feature set X and the target y
-X = data.drop(['y'], axis=1)
-y = data['y'].apply(lambda x: 0 if x == 'no' else 1)  # Convert the target to binary format (0, 1)
+# Missing values check
+missing_values = data.isnull().sum()
 
-# Split the data into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+# Count of each unique value in the column 'y'
+y_counts = data['y'].value_counts()
 
-# Identify the numerical and categorical columns
-num_cols = X_train.select_dtypes(include=['int64', 'float64']).columns
-cat_cols = X_train.select_dtypes(include=['object']).columns
+# Determine categorical columns
+data_types = data.dtypes
+categorical_columns = data_types[data_types == 'object'].index.tolist()
 
-# Create a preprocessor
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', StandardScaler(), num_cols),
-        ('cat', OneHotEncoder(), cat_cols)])
+# One-hot encode the categorical columns using pd.get_dummies
+data_encoded = pd.get_dummies(data, columns=categorical_columns, drop_first=True)
 
-# Fitting and transforming the training data
-X_train = preprocessor.fit_transform(X_train)
+# Split the data
+X = data_encoded.drop('y_yes', axis=1)
+y = data_encoded['y_yes']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
-# Transforming the test data
-X_test = preprocessor.transform(X_test)
+# Apply SMOTE with sampling_strategy=0.35
+oversampling_percentage = 0.35
+smote = SMOTE(sampling_strategy=oversampling_percentage, random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
 
-# Define the Logistic Regression model
-lr_model = LogisticRegression(random_state=42, max_iter=1000)
+# Initializing the Logistic Regression model
+log_reg = LogisticRegression(max_iter=10000)
 
-# Train the model
-lr_model.fit(X_train, y_train)
+# Training the model
+log_reg.fit(X_resampled, y_resampled)
 
-# Use cross-validation to evaluate accuracy
-cv_scores = cross_val_score(lr_model, X_train, y_train, cv=5, scoring='accuracy')
-mean_cv_score = cv_scores.mean()
+# Predicting probabilities on the testing data
+y_prob = log_reg.predict_proba(X_test)[:, 1]
 
-# Predict on the test set
-y_pred_lr = lr_model.predict(X_test)
+# Classifying samples based on the probability cutoff of 0.3
+y_pred = (y_prob > 0.3).astype(int)
 
-# Classification report
-report = classification_report(y_test, y_pred_lr, target_names=['No', 'Yes'])
-
-# Print the mean CV score and the classification report
-print(mean_cv_score)
+# Evaluating the model
+confusion = confusion_matrix(y_test, y_pred)
+report = classification_report(y_test, y_pred)
+print(confusion)
 print(report)
 
-# Define the XGBoost model
-xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+# Define the hyperparameter grid for logistic regression
+param_grid = {
+    'C': [0.01, 0.1, 1, 10],
+    'penalty': ['l1', 'l2'],
+    'solver': ['liblinear', 'saga']
+}
 
-# Train the model
-xgb_model.fit(X_train, y_train)
+# Train a logistic regression model with the best hyperparameters
+best_params = {'C': 0.1, 'penalty': 'l2', 'solver': 'liblinear'}
 
-# Predict on the test set
-y_pred_xgb = xgb_model.predict(X_test)
+best_log_reg = LogisticRegression(**best_params, max_iter=10000)
+best_log_reg.fit(X_resampled, y_resampled)
 
-# Classification report
-report = classification_report(y_test, y_pred_xgb, target_names=['No', 'Yes'])
+# Predict with the best model using 0.3 probability cutoff
+best_y_prob = best_log_reg.predict_proba(X_test)[:, 1]
+best_y_pred_0_3 = (best_y_prob > 0.3).astype(int)
 
-# Print the classification report
-print(report)
+# Evaluate the model
+best_report_0_3 = classification_report(y_test, best_y_pred_0_3)
+
+print("Best Hyperparameters:")
+print(best_params)
+print("\nClassification Report with 0.3 Probability Cutoff:")
+print(best_report_0_3)
+
+# Initializing the MLP classifier
+mlp_manual = MLPClassifier(
+    hidden_layer_sizes=(35, 35, 35),
+    activation='relu',
+    solver='adam',
+    alpha=1,
+    max_iter=2000,
+    random_state=123
+)
+
+# Training the MLP classifier
+mlp_manual.fit(X_resampled, y_resampled)
+
+# Predict using the MLP classifier
+y_pred_mlp = mlp_manual.predict(X_test)
+
+# Evaluating the MLP classifier
+report_mlp = classification_report(y_test, y_pred_mlp)
+
+print("\nMLP Classification Report:")
+print(report_mlp)
+
+# Using custom probability cutoff of 0.3 for MLP
+y_prob_mlp = mlp_manual.predict_proba(X_test)[:, 1]
+y_pred_mlp_0_3 = (y_prob_mlp > 0.3).astype(int)
+
+# Evaluating the MLP classifier with the custom cutoff
+report_mlp_0_3 = classification_report(y_test, y_pred_mlp_0_3)
+
+print("\nMLP Classification Report with 0.3 Probability Cutoff:")
+print(report_mlp_0_3)
